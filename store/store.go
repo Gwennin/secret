@@ -4,10 +4,10 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"time"
 )
@@ -19,8 +19,9 @@ const (
 )
 
 type Store struct {
-	file   *os.File
-	cipher cipher.Block
+	basePath string
+	files    map[string]struct{}
+	cipher   cipher.Block
 }
 
 type Data struct {
@@ -31,14 +32,9 @@ type Data struct {
 }
 
 func NewStore() (*Store, error) {
-	file, err := ioutil.TempFile(os.TempDir(), "scrt_")
-	if err != nil {
-		return nil, err
-	}
-
 	// An AES-256 Key is 32b
 	key := make([]byte, 32)
-	_, err = rand.Read(key)
+	_, err := rand.Read(key)
 	if err != nil {
 		return nil, err
 	}
@@ -49,9 +45,22 @@ func NewStore() (*Store, error) {
 	}
 
 	return &Store{
-		file:   file,
-		cipher: cipher,
+		cipher:   cipher,
+		basePath: os.TempDir() + "scrt_",
+		files:    make(map[string]struct{}),
 	}, nil
+}
+
+func (s Store) getFile(id []byte) (*os.File, error) {
+	fileName := hex.EncodeToString(id[:16])
+	filePath := s.basePath + fileName
+	file, err := os.OpenFile(filePath, os.O_SYNC|os.O_CREATE|os.O_RDWR, 0655)
+	if err != nil {
+		return nil, err
+	}
+
+	s.files[fileName] = struct{}{}
+	return file, nil
 }
 
 func (s Store) Save(text string, revelation time.Time) (string, error) {
@@ -84,12 +93,18 @@ func (s Store) Save(text string, revelation time.Time) (string, error) {
 	row = append(row, byte(uint8(len(encrypted))))
 	row = append(row, encrypted...)
 
-	_, err = s.file.Write(row)
+	file, err := s.getFile(id)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	_, err = file.Write(row)
 	if err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("%064x", id), nil
+	return hex.EncodeToString(id), nil
 }
 
 func (s Store) Get(id string) (*Data, error) {
@@ -97,15 +112,27 @@ func (s Store) Get(id string) (*Data, error) {
 		return nil,
 			fmt.Errorf("The size of the id shall be equals to %d", idSize*2)
 	}
+
+	decID, err := hex.DecodeString(id)
+	if err != nil {
+		return nil, err
+	}
+
+	file, err := s.getFile(decID)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
 	var currentOffset int64
-	_, err := s.file.Seek(0, 0)
+	_, err = file.Seek(0, 0)
 	if err != nil {
 		return nil, err
 	}
 
 	for {
 		readID := make([]byte, idSize)
-		_, err = s.file.Read(readID)
+		_, err = file.Read(readID)
 		if err != nil {
 			if err == io.EOF {
 				return nil, nil
@@ -114,10 +141,10 @@ func (s Store) Get(id string) (*Data, error) {
 		}
 		currentOffset += idSize
 
-		if fmt.Sprintf("%032x", readID) == id {
+		if hex.EncodeToString(readID) == id {
 			// fixedSize will contains the bDate field + the size of the encrypted field
 			fixedSize := make([]byte, bDateSize+1)
-			_, err = s.file.Read(fixedSize)
+			_, err = file.Read(fixedSize)
 			if err != nil {
 				if err == io.EOF {
 					return nil, nil
@@ -137,7 +164,7 @@ func (s Store) Get(id string) (*Data, error) {
 			size := uint8(fixedSize[bDateSize])
 
 			encrypted := make([]byte, size)
-			_, err = s.file.Read(encrypted)
+			_, err = file.Read(encrypted)
 			if err != nil {
 				if err == io.EOF {
 					return nil, nil
@@ -158,13 +185,13 @@ func (s Store) Get(id string) (*Data, error) {
 				offset:     currentOffset,
 			}, nil
 		}
-		_, err = s.file.Seek(bDateSize, 1)
+		_, err = file.Seek(bDateSize, 1)
 		if err != nil {
 			return nil, err
 		}
 
 		bSize := make([]byte, 1)
-		_, err = s.file.Read(bSize)
+		_, err = file.Read(bSize)
 		if err != nil {
 			if err == io.EOF {
 				return nil, nil
@@ -173,7 +200,7 @@ func (s Store) Get(id string) (*Data, error) {
 		}
 
 		size := int64(bSize[0])
-		_, err = s.file.Seek(size, 1)
+		_, err = file.Seek(size, 1)
 		if err != nil {
 			return nil, err
 		}
@@ -212,6 +239,8 @@ func (s Store) decrypt(encrypted []byte) (string, error) {
 }
 
 func (s Store) Close() {
-	s.file.Close()
-	os.Remove(s.file.Name())
+	for name := range s.files {
+		filePath := s.basePath + name
+		os.Remove(filePath)
+	}
 }
