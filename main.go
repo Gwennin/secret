@@ -60,6 +60,12 @@ func Get(w http.ResponseWriter, r *http.Request) {
 
 	if expired {
 		d.Text = data.Text
+		err = s.Delete(data)
+		if err != nil {
+			log.Printf("Unable to delete id %q: %v", id, err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	} else {
 		d.Expiration = &data.Expiration
 	}
@@ -91,9 +97,9 @@ func Save(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	if len(d.Text) == 0 || d.Expiration.Before(time.Now().UTC()) {
+	if len(d.Text) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, "Text and expiration date must be set")
+		fmt.Fprint(w, "Secret must be set")
 		return
 	}
 

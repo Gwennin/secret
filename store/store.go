@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	idSize    = 32
-	bDateSize = 15
-	textSize  = 6 * aes.BlockSize
+	idSize       = 32
+	bDateSize    = 15
+	textSize     = 6 * aes.BlockSize
+	fileNameSize = 16 * 2
 )
 
 type Store struct {
@@ -29,6 +30,7 @@ type Data struct {
 	Text       string
 	Expiration time.Time
 	offset     int64
+	rowSize    int64
 }
 
 func NewStore() (*Store, error) {
@@ -51,8 +53,8 @@ func NewStore() (*Store, error) {
 	}, nil
 }
 
-func (s Store) getFile(id []byte) (*os.File, error) {
-	fileName := hex.EncodeToString(id[:16])
+func (s Store) getFile(id string) (*os.File, error) {
+	fileName := id[:fileNameSize]
 	filePath := s.basePath + fileName
 	file, err := os.OpenFile(filePath, os.O_SYNC|os.O_CREATE|os.O_RDWR, 0655)
 	if err != nil {
@@ -77,6 +79,8 @@ func (s Store) Save(text string, revelation time.Time) (string, error) {
 		return "", err
 	}
 
+	strID := hex.EncodeToString(id)
+
 	bDate, err := revelation.UTC().MarshalBinary()
 	if err != nil {
 		return "", err
@@ -93,7 +97,7 @@ func (s Store) Save(text string, revelation time.Time) (string, error) {
 	row = append(row, byte(uint8(len(encrypted))))
 	row = append(row, encrypted...)
 
-	file, err := s.getFile(id)
+	file, err := s.getFile(strID)
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +108,12 @@ func (s Store) Save(text string, revelation time.Time) (string, error) {
 		return "", err
 	}
 
-	return hex.EncodeToString(id), nil
+	err = file.Sync()
+	if err != nil {
+		return "", err
+	}
+
+	return strID, nil
 }
 
 func (s Store) Get(id string) (*Data, error) {
@@ -113,12 +122,7 @@ func (s Store) Get(id string) (*Data, error) {
 			fmt.Errorf("The size of the id shall be equals to %d", idSize*2)
 	}
 
-	decID, err := hex.DecodeString(id)
-	if err != nil {
-		return nil, err
-	}
-
-	file, err := s.getFile(decID)
+	file, err := s.getFile(id)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +143,6 @@ func (s Store) Get(id string) (*Data, error) {
 			}
 			return nil, err
 		}
-		currentOffset += idSize
 
 		if hex.EncodeToString(readID) == id {
 			// fixedSize will contains the bDate field + the size of the encrypted field
@@ -152,7 +155,6 @@ func (s Store) Get(id string) (*Data, error) {
 				return nil, err
 			}
 
-			currentOffset += bDateSize + 1
 			bDate := fixedSize[:bDateSize]
 
 			var expiration time.Time
@@ -171,7 +173,6 @@ func (s Store) Get(id string) (*Data, error) {
 				}
 				return nil, err
 			}
-			currentOffset += int64(size)
 
 			text, err := s.decrypt(encrypted)
 			if err != nil {
@@ -183,6 +184,7 @@ func (s Store) Get(id string) (*Data, error) {
 				Text:       text,
 				Expiration: expiration,
 				offset:     currentOffset,
+				rowSize:    idSize + bDateSize + 1 + int64(size),
 			}, nil
 		}
 		_, err = file.Seek(bDateSize, 1)
@@ -205,8 +207,56 @@ func (s Store) Get(id string) (*Data, error) {
 			return nil, err
 		}
 
-		currentOffset += bDateSize + 1 + size
+		currentOffset += idSize + bDateSize + 1 + size
 	}
+}
+
+func (s Store) Delete(data *Data) error {
+	file, err := s.getFile(data.ID)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
+	readFrom := data.offset + data.rowSize
+	readSize := info.Size() - readFrom
+
+	if readFrom == 0 && readSize == data.rowSize {
+		return os.Remove(file.Name())
+	}
+
+	_, err = file.Seek(readFrom, 0)
+	if err != nil {
+		return err
+	}
+
+	end := make([]byte, readSize)
+	_, err = file.Read(end)
+	if err != nil {
+		return err
+	}
+
+	_, err = file.Seek(readFrom, 0)
+	if err != nil {
+		return err
+	}
+
+	_, err = file.Write(end)
+	if err != nil {
+		return err
+	}
+
+	err = file.Truncate(data.offset + readSize)
+	if err != nil {
+		return err
+	}
+
+	return file.Sync()
 }
 
 func (s Store) encrypt(text string) ([]byte, error) {

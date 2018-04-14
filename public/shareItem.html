@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <!--<link rel="icon" href="/favicon.ico">-->
+
+    <title>Secret - Sharing</title>
+
+    <link href="static/css/bootstrap.min.css" rel="stylesheet">
+    <link href="static/css/style.css" rel="stylesheet">
+</head>
+
+<body class="text-center">
+    <div>
+        <img class="mb-4" src="static/images/key.svg" alt="" width="72" height="72">
+        <h1 class="h3 mb-3 font-weight-normal" id="text">You can now share your secret:</h1>
+        <br />
+        <a id="link"></a>
+    </div>
+
+    <script src="static/js/jquery-3.1.1.slim.min.js"></script>
+    <script src="static/js/tether.min.js"></script>
+    <script src="static/js/bootstrap.min.js"></script>
+
+    <script>
+        id = window.location.hash.substr(1)
+
+        link = document.getElementById('link')
+        link.href = "item.html#" + id
+        link.innerHTML = link.href
+    </script>
+</body>
+
+</html>

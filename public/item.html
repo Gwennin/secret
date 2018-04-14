@@ -8,18 +8,14 @@
     <meta name="author" content="">
     <!--<link rel="icon" href="/favicon.ico">-->
 
-    <title>Text Hide</title>
-
-    <!-- Bootstrap core CSS -->
-    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
-
-    <!-- Custom styles for this template -->
-    <link href="/static/css/style.css" rel="stylesheet">
+    <title>Secret - Reveal</title>
+    <link href="static/css/bootstrap.min.css" rel="stylesheet">
+    <link href="static/css/style.css" rel="stylesheet">
 </head>
 
 <body class="text-center">
     <div>
-        <img class="mb-4" src="/static/images/key.svg" alt="" width="72" height="72">
+        <img class="mb-4" src="static/images/key.svg" alt="" width="72" height="72">
         <h1 class="h3 mb-3 font-weight-normal" id="text">Please wait...</h1>
         <div id="clockdiv" style="visibility: hidden;">
             <div>
@@ -39,26 +35,18 @@
                 <div class="smalltext">Seconds</div>
             </div>
         </div>
-
-        <br />
-        <br />
-        <a id="link"></a>
     </div>
 
-    <script src="/static/js/jquery-3.1.1.slim.min.js"></script>
-    <script src="/static/js/tether.min.js"></script>
-    <script src="/static/js/bootstrap.min.js"></script>
+    <script src="static/js/jquery-3.1.1.slim.min.js"></script>
+    <script src="static/js/tether.min.js"></script>
+    <script src="static/js/bootstrap.min.js"></script>
 
     <script>
-        link = document.getElementById('link')
-        link.href = window.location.toString()
-        link.innerHTML = window.location.toString()
-
         id = window.location.hash.substr(1)
 
         $.ajax({
             type: 'get',
-            url: '/api/' + id,
+            url: 'api/' + id,
             error: function () {
                 alert("There was an error processing this page.");
             },
