@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <!--<link rel="icon" href="/favicon.ico">-->
+
+    <title>Text Hide</title>
+
+    <!-- Bootstrap core CSS -->
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Custom styles for this template -->
+    <link href="/static/css/style.css" rel="stylesheet">
+</head>
+
+<body class="text-center">
+    <form class="form-signin">
+        <img class="mb-4" src="/static/images/key.svg" alt="" width="72" height="72">
+        <h1 class="h3 mb-3 font-weight-normal">Please write the text to hide</h1>
+        <label for="inputText" class="sr-only">Text to hide</label>
+        <input type="text" id="inputText" class="form-control" placeholder="Text to hide" required autofocus>
+        <label for="inputExpiration" class="sr-only">Expiration</label>
+        <input type="date" id="inputExpiration" class="form-control" placeholder="Expiration date" required>
+        <button class="btn btn-lg btn-primary btn-block" type="button" onclick="save()">Submit</button>
+        <p class="mt-5 mb-3 text-muted">&copy; Gwennin Le Bourdonnec</p>
+    </form>
+
+    <script src="/static/js/jquery-3.1.1.slim.min.js"></script>
+    <script src="/static/js/tether.min.js"></script>
+    <script src="/static/js/bootstrap.min.js"></script>
+
+    <script>
+        function save() {
+            data = JSON.stringify({
+                Text: document.getElementById('inputText').value,
+                Expiration: document.getElementById('inputExpiration').valueAsDate
+            })
+
+            $.ajax({
+                type: 'post',
+                data: data,
+                dataType: 'json',
+                url: '/api',
+                complete: function (output) {
+                    console.log(output.status)
+                    if (output.status == 201) {
+                        window.location.replace("item.html#" + output.responseText);
+                    } else {
+                        alert(output.statusText + ": " + output.responseText);
+                    }
+                }
+            }).done();
+        }
+    </script>
+</body>
+
+</html>
